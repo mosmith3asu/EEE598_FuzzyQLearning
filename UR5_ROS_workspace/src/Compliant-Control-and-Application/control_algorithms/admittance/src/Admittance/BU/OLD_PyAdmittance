@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+import rospy
+import numpy as np
+from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Pose
+from tf import TransformListener, listener
+from std_msgs.msg import String
+from tf import TransformListener
+# Twist: this expresses velocity in free space broken into it's linear and angular parts. 
+# | linear.{x,y,z}
+# | angular.{x,y,z}
+#pub_arm_cmd_  = nh_.advertise<geometry_msgs::Twist>(topic_arm_command, 5);
+
+"""
+// ROS VARIABLES:
+  ros::NodeHandle nh_;
+  ros::Rate loop_rate_;
+
+  // ADMITTANCE PARAMETERS:
+  Matrix6d M_, D_, K_;
+
+  // Subscribers:
+  ros::Subscriber sub_arm_state_;
+  ros::Subscriber sub_wrench_state_;
+  // Publishers:
+  ros::Publisher pub_arm_cmd_;
+
+  // Variables:
+  Vector3d      arm_position_;
+  Quaterniond   arm_orientation_;
+  Vector6d      arm_twist_;
+  Vector6d      wrench_external_;
+  Vector6d      arm_desired_twist_adm_;
+  Vector6d      arm_desired_accelaration;
+
+  Vector7d      desired_pose_;
+  Vector3d      desired_pose_position_;
+  Quaterniond   desired_pose_orientation_;
+
+  Vector6d      error;
+
+  // TF:
+  // Transform from base_link to world
+  Matrix6d rotation_base_;
+  // Listeners
+  tf::TransformListener listener_ft_;
+  tf::TransformListener listener_control_;
+  tf::TransformListener listener_arm_;
+
+  // Guards
+  bool ft_arm_ready_;
+  bool base_world_ready_;
+  bool world_arm_ready_;
+
+  double arm_max_vel_;
+  double arm_max_acc_;
+"""
+class Admittance(object):
+	def __init__(self):
+		#rospy.init_node('admittance_controller', anonymous=True)
+		# Subscribers
+    		self.sub_arm_state_ = rospy.Subscriber('topic_arm_state', String, state_arm_callback)
+    		self.sub_wrench_state_ = rospy.Subscriber('topic_wrench_state', String, state_wrench_callback)
+    		
+    		# Publisher    		
+    		self.pub_arm_cmd_ = rospy.Publisher('topic_arm_command', Twist, queue_size=5)
+    		rospy.spin() #  keeps python from exiting until this node is stopped
+    		
+    		
+  		
+  		# Initializing the class variables:
+  		self.arm_position_ = np.zeros(3) # Vector3D
+  		self.arm_orientation_ = np.zeros(4) # Quaternion 
+		self.arm_twist_ = np.zeros(6) # Vector6D
+		self.wrench_external_= np.zeros(6)  # Vector6D
+		self.arm_desired_twist_adm_ = np.zeros(6) # Vector6D Twist()
+		self.arm_desired_accelaration_ = np.zeros(6) # Vector6D
+		
+		self.desired_pose_position_= np.zeros(7) # Vector7D
+		#self.desired_pose_position_= np.zeros(3) # Vector3D
+		#self.desired_pose_orientation_ = np.zeros(4) # Quaternion 
+		
+		self.error = np.zeros(6) # Vector6D
+		
+		# TF:
+ 		# Transform from base_link to world
+		self.rotation_base_ = np.zeros([6,6])
+		
+		// Listeners
+ 		self.listener_ft_ = TransformListener()
+  		self.listener_control_ = TransformListener()
+  		self.listener_arm_ = TransformListener()
+  		
+  		# Guards
+  		self.t_arm_ready_ = False
+  		self.base_world_ready_ = False
+  		self.world_arm_ready_ = False
+  		
+  		self.arm_max_vel_
+  		self.arm_max_acc_
+  		self.force_x_pre = 0
+  		self.force_y_pre = 0
+  		self.force_z_pre = 0
+  		
+  		wait_for_transformations()
+  	def wait_for_transformations(self):
+  		listener = TransformListener()
+  		while not get_rotation_matrix(rot_matrix,listener,base_link_,end_link_): time.sleep(1)
+  		self.t_arm_ready_ = True
+  		self.base_world_ready_ = True
+  		self.world_arm_ready_ = True
+  		rospy.loginfo(rospy.get_caller_id() + 'The Force/Torque sensor is ready to use')
+  		
+ 	def get_rotation_matrix(self,from_frame,to_frame):
+ 		try:
+	 		t = self.tf.getLatestCommonTime(from_frame,to_frame) # "/base_link", "/map"
+		    	position, quaternion = self.tf.lookupTransform(from_frame,to_frame, t)
+		    	rotation_matrix
+		    	#print position, quaternion
+		    	return True
+		except: return False
+	def compute_admittance(self):
+		pass
+	def send_command(self):
+		arm_twist_cmd = Twist()
+		arm_twist_cmd.linear.x  = arm_desired_twist_adm_[0]*0.3
+  		arm_twist_cmd.linear.y  = arm_desired_twist_adm_[1]*0.3
+  		arm_twist_cmd.linear.z  = arm_desired_twist_adm_[2]*0.3
+  		arm_twist_cmd.angular.x = arm_desired_twist_adm_[3]*0.3
+  		arm_twist_cmd.angular.y = arm_desired_twist_adm_[4]*0.3
+  		arm_twist_cmd.angular.z = arm_desired_twist_adm_[5]*0.3
+  		pub_arm_cmd_.publish(arm_twist_cmd)
+  	# CALLBACKS
+	def state_arm_callback(self,msg):
+		# type: cartesian_state_msgs:PoseTwistConstPtr
+		
+		#arm_pose_ = Pose()
+		#arm_position_.x = msg.pose.position.x
+		#arm_position_.y = msg.pose.position.y
+		#arm_position_.z = msg.pose.position.z
+		#arm_orientation_.x = = msg.pose.orientation.x
+		arm_twist.linear.x = msg.pose.position.x
+		arm_twist.linear.y = msg.pose.position.y
+		arm_twist.linear.z = msg.pose.position.z
+		arm_twist.angular.x = msg.pose.orientation.x
+		arm_twist.angular.y = msg.pose.orientation.y
+		arm_twist.angular.z = msg.pose.orientation.z
+		arm_twist.angular.w = msg.pose.orientation.w
+	def state_wrench_callback(self,msg):
+		force_thres_lower_limit_ = 50
+    		force_thres_upper_limit_ = 100
+    		force_bounds = [force_thres_lower_limit_,force_thres_upper_limit_]
+		"""geometry_msgs::WrenchStampedConstPtr""""
+		if bound(wrench_ft_frame[0],force_bounds,test=True):
+			pass
+		else:
+			wrench_ft_frame[0] = 0
+		
+		
+def bound(val,bnds,test=False):
+	if test:return (val>=bds[0] and val <= bnds[1])
+	return min(max(val,bnds[0]),bnds[1])
+
+		

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+
+#from RL_Controller import MemoryHandler
+import numpy as np
+
+import matplotlib.pyplot as plt
+from datetime import datetime
+
+def get_MJT(tf,xf,t0=0,x0=0,N=100):
+	"""
+	𝜏 is the normalized time and equal to 𝑡/𝑡
+	"""
+	#t = np.linspace(t0,tf,N)
+	dt = (tf-t0)/N
+	tau = np.linspace(0,1,N)
+	xt = x0 + (xf - x0)*(6*np.power(tau,5) - 15*np.power(tau,4) +10* np.power(tau,3))
+	
+	vt = np.gradient(xt)/dt
+	at = np.gradient(vt)/dt
+	Jt = np.gradient(at)/dt
+	return xt,vt,at,Jt
+
+class MemoryHandler(object):
+	def __init__(self):
+		self.sticky_names = ['Episode Reward','Episode Length','Episode Energy']
+		self.nonsticky_names = ['Damping','Velocity','Force'] # 'Jerk'
+		self.names = self.sticky_names +self.nonsticky_names
+		
+		now = datetime.now()
+		self.date_label = now.strftime("-Date_%m_%d_%Y-Time_%H_%M_%S")
+		self.fname = 'Data_' + self.date_label + '.npz'
+		
+		
+		#start2goal_cm = [0,57] # cm
+		#start2goal_ros = [-0.3,0.3]
+		self.pos2dist = lambda _pos: (57./0.6)*(_pos+0.3)
+		
+		self.epi_data = []
+		
+		
+		self.data = {}
+		for name in self.names: self.data[name] = []
+	def geti(self,name): return self.names.index(name)
+	def get(self,name): return self.data[name]
+	def add(self,name,value): self.data[name].append(value)
+	def replace(self,name,value): self.data[name][-1] = value
+	def reset(self):
+		# export to perminant buffer
+		#pckg = copy.deepcopy(self.epi_data_pckg)
+		#for key in names: pckg[key] = self.data[name]
+		#self.epi_data.append(copy.deepcopy(pckg))
+		self.epi_data.append(copy.deepcopy(self.data))
+		for name in self.nonsticky_names:
+			self.data[name] = []
+	def save(self):
+		print(f'SAVING DATA AS [{self.fname}] [nEpi={len(self.epi_data)}]')
+		np.savez_compressed(self.fname ,a=self.epi_data)
+	def load(self,fname):
+		plt.ioff()
+		
+		loaded = np.load(fname,allow_pickle=True)
+		self.epi_data = loaded['a']
+		
+		data = self.epi_data[-1]
+		print(f'LOADING DATA AS [{fname}]')
+		print(f'\t| N episodes: {len(self.epi_data)}')
+		print(f'\t| Data Types:')
+		#for name in data.keys(): 
+		for name in self.names: 
+			is_missing = (name not in data.keys())
+			if is_missing: print(f'\t\t -[MISSING] {name}')
+			else: print(f'\t\t - {name}')
+		
+
+		
+		
+		T = data['Episode Length'][0]
+		nsteps = len(data['Velocity'])	
+		
+		dt = T/len(data['Velocity'])
+		t_epif = np.arange(nsteps)*dt
+		
+		#t_epif = np.arange(len(data['Velocity']))* (T/)
+		NO_DATA = np.zeros(len(data['Velocity']))
+		try: Ft_epif = data['Force']
+		except: Ft_epif = np.zeros(len(data['Velocity']))
+		
+		begin_idx = 0#np.array(np.where(Ft_epif>0)).flatten()[0]
+		
+		CumReward_epif = data['Episode Reward']
+		Length_epif = np.array(data['Episode Length']) - dt*begin_idx
+		try: Energy_epif = data['Episode Energy'][begin_idx:]
+		except: Energy_epif = np.zeros(len(Length_epif))
+		Dt_epif = data['Damping'][begin_idx:]
+		vt_epif = data['Velocity'][begin_idx:]
+		Ft_epif = Ft_epif[begin_idx:]
+		
+		
+		
+		# Calculation of Dynamics	
+		vt_epif = np.array(vt_epif)		
+		pt_epif = np.zeros(nsteps)
+		at_epif = np.zeros(nsteps)
+		Jt_epif = np.zeros(nsteps)
+		
+		for i in range(1,nsteps):
+			print(pt_epif.shape)
+			print(vt_epif.shape)
+			#print(dt.shape)
+			pt_epif[i] = pt_epif[i] + vt_epif[i-1]*dt
+		at_epif = np.gradient(vt_epif)/dt
+		Jt_epif = np.gradient(vt_epif)/dt
+		xt_MJT,vt_MJT,at_MJT,Jt_MJT = get_MJT(tf = t_epif[-1],xf = pt_epif,N= len(t_epif))
+		
+		
+		
+		stats = [CumReward_epif,Length_epif,Energy_epif]
+		epif = [pt_epif,vt_epif,at_epif,Jt_epif]
+		MJT = [xt_MJT,vt_MJT,at_MJT,Jt_MJT]
+		return stats,epif,MJT
+
+
+
+
+def main():
+	#fname = 'YOUSEF_Data_-Date_11_17_2022-Time_18_55_40.npz' #fname = 'Data_-Date_11_17_2022-Time_18_55_40.npz'
+	#fname = 'NEERAJ_Data_-Date_11_17_2022-Time_19_40_51.npz'
+	fname = 'Data_-Date_11_18_2022-Time_15_41_44.npz' # Vik
+	
+	
+	Memory = MemoryHandler()
+	stats,epif,MJT = Memory.load(fname)
+	CumReward_epif,Length_epif,Energy_epif = stats
+	pt_epif,vt_epif,at_epif,Jt_epif = epif
+	xt_MJT,vt_MJT,at_MJT,Jt_MJT = MJT
+	
+	nRows = 11
+	nCols = 1
+	
+	fig,axs = plt.subplots(nRows,nCols)
+	for i in [0,1,2]: axs[i].plot(stats[i])
+	for i in range(4): axs[i+3].plot(epif[i])
+	for i in range(4): axs[i+5].plot(MJT[i])
+	plt.show()
+	
+
+if __name__ == "__main__":
+	main()
+
+#plt.show()
